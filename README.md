@@ -16,4 +16,6 @@ The next big thing is to open up the control loop and offer e.g. a serial port f
  
 ## Hardware
 
- 
+For schematics and PCB see:
+https://easyeda.com/asokolsky/Fan_Controller-0c20aa3afe5045e5a980d684715a4248
+
