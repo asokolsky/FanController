@@ -3,28 +3,22 @@
  *  Use builtin LED to indicate overheating
  *  
  */
-
-#define DEBUG 1
-
-#ifdef DEBUG
-  #define DEBUG_PRINT(x)    Serial.print(x)
-  #define DEBUG_PRINTDEC(x) Serial.print(x, DEC)
-  #define DEBUG_PRINTHEX(x) Serial.print(x, HEX)
-  #define DEBUG_PRINTLN(x)  Serial.println(x)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTDEC(x)
-  #define DEBUG_PRINTHEX(x)
-  #define DEBUG_PRINTLN(x)
-#endif 
+#include <Arduino.h>
+#include "Trace.h"
+#include "Fan.h"
 
  
 /** LM35 temperature sensor is connected to this pin */
 const int pinTemp = A1;
-/** the PWM pin where fan is */
-const int pinFan = 3;
-/** the sensor input pin */
-const int pinFanSensor = 2;
+
+/** These are the fans we control */
+static Fan g_fan[] = {
+  {/** the PWM pin where fan is */ 3, /** the sensor input pin */ 2}
+};
+/** We control these many fans */
+const short int iFans = sizeof(g_fan) / sizeof(g_fan[0]);
+
+
 /** the overheating led pin - use a built-in one */
 const int pinLed = 13;
 
@@ -38,19 +32,10 @@ unsigned short int g_tempMin = 0;
 /** Max observed temperature in C */
 unsigned short int g_tempMax = 0;
 
-/** min fan PWM value to use */
-const int pwmMin = 16;
-/** min fan PWM value at which a fan can start  */
-const int pwmStart = 30;
-/** max fan PWM value to use */
-const int pwmMax = 255;
 
 //
 // nothing to customize below
 //
-
-/** last PWM value we sent to the fan */
-static unsigned short int g_pwmFan = 0;
 
 /** Counter for sensor fan feedback */
 //volatile unsigned long int g_uiCounter = 0;
@@ -122,24 +107,9 @@ void dumpStats(unsigned long now)
  * utility to find the min PWM at which this fan starts
  */
 void fanTest()
-{  
-  Serial.println("Starting a test to find a min pwm at which this fan can be started...");
-  Serial.println("Note the value when we first FAIL to start the fan");
-  for(unsigned short int pwm = 90; pwm > 10; pwm = pwm - 8)
-  {
-    //
-    // stop the fan
-    //
-    analogWrite(pinFan, LOW);
-    DEBUG_PRINT("Stopping fan.. analogWrite(pinFan) ");
-    DEBUG_PRINTLN(LOW);
-    delay(4*1000);
-    // try to start the fan
-    analogWrite(pinFan, pwm);
-    DEBUG_PRINT("Starting fan.. analogWrite(pinFan) ");
-    DEBUG_PRINTLN(pwm);
-    delay(4*1000);
-  }
+{
+  for(short int i = 0; i < iFans; i++)
+    g_fan[i].test();
 }
 
 /**
@@ -150,30 +120,26 @@ void fanSetup()
   //
   // stop the fan
   //
-  analogWrite(pinFan, LOW);
-  DEBUG_PRINT("Stopping fan.. analogWrite(pinFan) ");
-  DEBUG_PRINTLN(LOW);
+  for(short int i = 0; i < iFans; i++)
+    g_fan[i].stop();
   delay(4*1000);
   //
   // spin the fan at start PWM
   //
-  analogWrite(pinFan, pwmStart);
-  DEBUG_PRINT("Starting fan.. analogWrite(pinFan) ");
-  DEBUG_PRINTLN(pwmStart);
+  for(short int i = 0; i < iFans; i++)
+    g_fan[i].start();
   delay(4*1000);
   //
   // spin the fan at max RPM
   //
-  analogWrite(pinFan, pwmMax);
-  DEBUG_PRINT("Max fan spin... analogWrite(pinFan) ");
-  DEBUG_PRINTLN(pwmMax);
+  for(short int i = 0; i < iFans; i++)
+    g_fan[i].spin(Fan::pwmMax);
   delay(4*1000);
   //
   // spin the fan at min RPM
   //
-  analogWrite(pinFan, pwmMin);
-  DEBUG_PRINT("Min fan spin... analogWrite(pinFan) ");
-  DEBUG_PRINTLN(pwmMin);
+  for(short int i = 0; i < iFans; i++)
+    g_fan[i].spin(Fan::pwmMin);
   delay(4*1000);
 }
 
@@ -184,9 +150,9 @@ void setup()
   // LM35 is not going to provide more than 1V output and that @100C
   // switch to internal 1.1V reference
   analogReference(INTERNAL);
+  
+  g_tempMin = g_tempMax = readTemperature();
 
-  pinMode(pinFan, OUTPUT);
-  pinMode(pinFanSensor, INPUT);
   pinMode(pinLed, OUTPUT);
   pinMode(pinTemp, INPUT);
 
@@ -198,9 +164,11 @@ void setup()
   //TCCR2B = TCCR2B & B11111000 | B00000101;    // set timer 2 divisor to   128 for PWM frequency of   245.10 Hz
   //TCCR2B = TCCR2B & B11111000 | B00000110;    // set timer 2 divisor to   256 for PWM frequency of   122.55 Hz
   //TCCR2B = TCCR2B & B11111000 | B00000111;    // set timer 2 divisor to  1024 for PWM frequency of    30.64 Hz
+  for(short int i = 0; i < iFans; i++)
+    g_fan[i].setup();
 
   //attachInterrupt(0, onHallSensor, RISING);
-  g_tempMin = g_tempMax = readTemperature();
+
 
   //fanTest();
   fanSetup();
@@ -220,39 +188,37 @@ void loop()
 
   if(temp < tempMin) 
   {
-    digitalWrite(pinFan, LOW);
+    for(short int i = 0; i < iFans; i++)
+      g_fan[i].stop();
     digitalWrite(pinLed, LOW);
-    g_pwmFan = 0;
   }  
   else if(temp < tempMax)
   {
-    unsigned int pwmFan = map(temp, tempMin, tempMax, pwmMin, pwmMax);
-    if(g_pwmFan == 0) {
-      if(pwmFan < pwmStart) 
-        pwmFan = pwmStart;
+    unsigned int pwmFan = map(temp, tempMin, tempMax, Fan::pwmMin, Fan::pwmMax);
+    unsigned short pwmNow = g_fan[0].getPWM();
+    if(pwmNow == 0) {
+      if(pwmFan < Fan::pwmStart) 
+        pwmFan = Fan::pwmStart;
     }
     else
     {
       // instead of just spinning at target pwm, lets get there gradually.
-      pwmFan = (pwmFan + g_pwmFan)/2;
+      pwmFan = (pwmFan + pwmNow)/2;
     }
-    analogWrite(pinFan, pwmFan);
-    DEBUG_PRINT("analogWrite(pinFan) ");
-    DEBUG_PRINTLN(pwmFan);
+    for(short int i = 0; i < iFans; i++)
+      g_fan[i].spin(pwmFan);
     digitalWrite(pinLed, LOW);
-    g_pwmFan = pwmFan;
   }
   else
   {
-    analogWrite(pinFan, pwmMax);
+    for(short int i = 0; i < iFans; i++)
+      g_fan[i].spin(Fan::pwmMax);
     digitalWrite(pinLed, HIGH);  // turn overheating led ON
-    g_pwmFan = pwmMax;
   }
   //DEBUG_PRINTLN(g_uiCounter);
   //g_uiCounter = 0;
 
-  dumpStats(millis());
-  
+  dumpStats(millis());  
   delay(4000);
 }
 
