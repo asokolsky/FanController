@@ -1,4 +1,3 @@
-
 /**
  * PWM-controled fan connected to an output  pin
  * Fan sensor may be connected to another input pin
