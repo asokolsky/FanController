@@ -19,11 +19,11 @@ The next big thing is to open up the control loop and offer e.g. a serial port f
  - Serial commands
  - Control multiple fans
 
-On Li/Unix you can read HD tempslike this:
-'''
+On Li/Unix you can read HD temperatures like this:
+```
 smartctl -a /dev/ada0 | grep Temperature_Celsius | awk '{print $10}'
-'''
+```
 or CPU temperature like this:
-'''
+```
 sysctl -n dev.cpu.0.temperature
-'''
+```
