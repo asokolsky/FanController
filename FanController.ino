@@ -8,10 +8,11 @@
 #include "Fan.h"
 #include "SerialCommand.h"
 #include "Led.h"
+#include "LM35.h"
 
  
-/** LM35 temperature sensor is connected to this pin */
-const int pinTemp = A1;
+/** LM35 temperature sensor is connected to this pin: A1 */
+LM35 g_lm35(A1);
 
 /** These are the fans we control */
 static Fan g_fan[] = {
@@ -57,33 +58,7 @@ SerialCommand g_sc;
  */
 unsigned short int readTemperature() 
 {
-  // first sample seems to fluctuate a lot. Disregard it
-  {
-    unsigned int intmp = analogRead(pinTemp);
-    //Serial.println(intmp);
-    delay(60);
-  }
-
-  // according to http://www.atmel.com/dyn/resources/prod_documents/doc8003.pdf
-  // 11 bit virtual resolution arduino ADC is 10 bit real resolution
-  // for 12 bit resolution 16 samples and >> 4 is needed
-  unsigned int reading = 0; // accumulate samples here
-  for(int i=0; i<=3; i++)
-  {
-    unsigned int intmp = analogRead(pinTemp);
-    reading = reading + intmp;
-    //Serial.println(intmp);
-    delay(60);
-  }
-  reading = reading>>2; // averaged over 4 samples
-  /*
-  unsigned int reading = analogRead(pinTemp);
-  Serial.print("analogRead() => ");
-  Serial.println(reading);
-  */
-  // 110 mV is mapped into 1024 steps.  analogReference(INTERNAL) needed
-  float tempC = (float)reading * 110 / 1024;
-  unsigned short temp = (unsigned short)tempC;
+  unsigned short temp = g_lm35.read();
   if(temp < g_tempMin)
     g_tempMin = temp;
   else if(temp > g_tempMax)
@@ -155,6 +130,13 @@ void fanSetup()
   delay(4*1000);
 }
 
+/**
+ * gettable vars:
+ *   FAN - fan speed in pwm
+ *   TEMP - C reading of the internal temp sensor
+ *   TEMP_SETPOINT_MIN - when to start fan
+ *   TEMP_SETPOINT_MAX - when to blow fan at full speed
+ */
 void onCommandGet() 
 {
   char *arg = g_sc.next();
@@ -181,12 +163,44 @@ void onCommandGet()
   }
   else
   {
+    
     onCommandUnrecognized(0);
   }
 }
+
+/**
+ * settable vars:
+ *   FAN - fan speed in pwm
+ *   TEMP - C reading of the internal temp sensor
+ *   TEMP_SETPOINT_MIN - when to start fan
+ *   TEMP_SETPOINT_MAX - when to blow fan at full speed
+ */
 void onCommandSet() 
 {
    char *arg = g_sc.next();
+  if(arg == 0)
+    return;
+  if(arg[0] == 'F')
+  {
+    // GET FAN handler
+    unsigned short pwmNow = g_fan[0].getPWM();
+    Serial.println(pwmNow);
+  } 
+  else if(arg[0] == 'T')
+  {
+    // GET TEMP handler
+    unsigned short int temp = readTemperature();  
+    Serial.println(temp);
+  }
+  else if(arg[0] == 'S')
+  {
+    // GET STATS handler
+    dumpStats();
+  }
+  else
+  {
+    onCommandUnrecognized(0);
+  }
 }
 void onCommandStats()
 {
@@ -194,18 +208,23 @@ void onCommandStats()
 }
 void onCommandUnrecognized(const char *command)
 {
-  // 
+  //
+  DEBUG_PRINT("Unrecognized command: ");
+  if(command != 0)
+  {
+    DEBUG_PRNTLN(command);
+  }
+  else
+  {
+    DEBUG_PRINTLN("");
+  }
 }
 
 void setup() 
 {
   Serial.begin(115200);
-  // LM35 is not going to provide more than 1V output and that @100C
-  // switch to internal 1.1V reference
-  analogReference(INTERNAL);  
-  pinMode(pinTemp, INPUT);
+  g_lm35.setup();
   g_tempMin = g_tempMax = readTemperature();
-
   g_led.setup();
 
   //---------------------------------------------- Set PWM frequency for D3 & D11 ------------------------------
