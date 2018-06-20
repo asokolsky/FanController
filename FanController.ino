@@ -9,38 +9,21 @@
 #include "SerialCommand.h"
 #include "Led.h"
 #include "LM35.h"
+#include "pcb.h"
+#include "OperationalMode.h"
 
- 
-/** LM35 temperature sensor is connected to this pin: A1 */
-LM35 g_lm35(A1);
 
-/** These are the fans we control */
-static Fan g_fan[] = {
-  {/** the PWM pin where fan is */ 3, /** the sensor input pin */ 2}
-};
-/** # of fans we control */
-const short int iFans = sizeof(g_fan) / sizeof(g_fan[0]);
+/** LM35 temperature sensor is connected to this pin */
+LM35 g_lm35(pinLM35);
 
+unsigned short int LM35::g_tempMin;
+unsigned short int LM35::g_tempMax;
+
+/** Potentiometer connected to this pin */
+Potentiometer g_pot(pinPotentiometer);
 
 /** the overheating (builtin) led is on pin 13 */
-Led g_led(13);
-
-/** the temperature in C to start the fan */
-const unsigned short int tempMin = 26;
-/** the maximum temperature in C when fan is at 100% */
-const unsigned short int tempMax = 35;
-
-/////////////////////////////////////////////////////////////////////////////////////
-// nothing to customize below
-//
-
-/** Min observed temperature in C */
-unsigned short int g_tempMin = 0;
-/** Max observed temperature in C */
-unsigned short int g_tempMax = 0;
-
-/** serial command handler */
-SerialCommand g_sc;
+Led g_led(pinLed);
 
 /** Counter for sensor fan feedback */
 //volatile unsigned long int g_uiCounter = 0;
@@ -51,36 +34,95 @@ SerialCommand g_sc;
   g_uiCounter++;
 }*/
 
-/**  
- * get the temperature and convert it to Celsius 
- * read analog LM35 sensor, 
- * presumes you did analogReference(INTERNAL); - more precise but smaller range
+/**
+ * analogRead wrapper with better precision
  */
-unsigned short int readTemperature() 
+unsigned int myAnalogRead(short int pin)
 {
-  unsigned short temp = g_lm35.read();
-  if(temp < g_tempMin)
-    g_tempMin = temp;
-  else if(temp > g_tempMax)
-    g_tempMax = temp;
-  return temp;
+  // first sample seems to fluctuate a lot. Disregard it
+  {
+    unsigned int intmp = analogRead(pin);
+    //Serial.println(intmp);
+    delay(60);
+  }
+  // according to http://www.atmel.com/dyn/resources/prod_documents/doc8003.pdf
+  // 11 bit virtual resolution arduino ADC is 10 bit real resolution
+  // for 12 bit resolution 16 samples and >> 4 is needed
+  unsigned int reading = 0; // accumulate samples here
+  for(int i=0; i<=3; i++)
+  {
+    unsigned int intmp = analogRead(pin);
+    reading = reading + intmp;
+    //Serial.println(intmp);
+    delay(60);
+  }
+  reading = reading>>2; // averaged over 4 samples
+  /*
+  unsigned int reading = analogRead(pin);
+  Serial.print("analogRead() => ");
+  Serial.println(reading);
+  */
+  return reading;
 }
+
+/**
+ * This works on Arduinos with a 328 or 168 only
+ * https://code.google.com/archive/p/tinkerit/wikis/SecretVoltmeter.wiki
+ */
+static long readVcc() 
+{ 
+  long result; 
+  // Read 1.1V reference against AVcc 
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1); 
+  delay(2); 
+  // Wait for Vref to settle 
+  ADCSRA |= _BV(ADSC); 
+  // Convert 
+  while (bit_is_set(ADCSRA,ADSC))
+    ; 
+  result = ADCL; 
+  result |= ADCH<<8; 
+  result = 1126400L / result; 
+  // Back-calculate AVcc in mV 
+  return result; 
+}
+
+/**
+ * This works on Arduinos with a 328 only
+ * https://code.google.com/archive/p/tinkerit/wikis/SecretThermometer.wiki
+ */
+static long readTemp() 
+{ 
+  long result; 
+  // Read temperature sensor against 1.1V reference 
+  ADMUX = _BV(REFS1) | _BV(REFS0) | _BV(MUX3); 
+  delay(2); 
+  // Wait for Vref to settle 
+  ADCSRA |= _BV(ADSC); 
+  // Convert 
+  while (bit_is_set(ADCSRA,ADSC))
+    ; 
+  result = ADCL; 
+  result |= ADCH<<8; 
+  result = (result - 125) * 1075; 
+  return result; 
+}
+
+
 /**
  * Dump some statistics so that we can see how the controller and environment are doing...
  */
 void dumpStats()
 {
   char buf[80];
-  sprintf(buf, "Settings: tempMin=%d, tempMax=%d,", (int)tempMin, (int)tempMax);
+  sprintf(buf, "Vcc=%ld mV, temp=%ld,", readVcc(), readTemp());
   Serial.println(buf);
-  int temp = (int)readTemperature();
-  sprintf(buf, "Observed: g_tempMin=%d, g_tempMax=%d, temp=%d", (int)g_tempMin, (int)g_tempMax, temp);
+  sprintf(buf, "Settings: tempMin=%d, tempMax=%d,", (int)OpMode::tempMin, (int)OpMode::tempMax);
   Serial.println(buf);
-  unsigned short pwm = g_fan[0].getPWM();
-  sprintf(buf, "Fan: pwm=%d", (int)pwm);
+  int temp = (int)g_lm35.read();
+  sprintf(buf, "Observed: g_tempMin=%d, g_tempMax=%d, temp=%d", (int)g_lm35.g_tempMin, (int)g_lm35.g_tempMax, temp);
   Serial.println(buf);
-  sprintf(buf, "Now: %lu ms", millis());
-  Serial.println(buf);
+  fansDumpStats(buf);
 }
 
 /**
@@ -100,38 +142,8 @@ void dumpStats(unsigned long now)
 }
 
 /**
- * Fan startup sequence
- */
-void fanSetup()
-{
-  //
-  // stop the fan
-  //
-  for(short int i = 0; i < iFans; i++)
-    g_fan[i].stop();
-  delay(4*1000);
-  //
-  // spin the fan at start PWM
-  //
-  for(short int i = 0; i < iFans; i++)
-    g_fan[i].start();
-  delay(4*1000);
-  //
-  // spin the fan at max RPM
-  //
-  for(short int i = 0; i < iFans; i++)
-    g_fan[i].spin(Fan::pwmMax);
-  delay(4*1000);
-  //
-  // spin the fan at min RPM
-  //
-  for(short int i = 0; i < iFans; i++)
-    g_fan[i].spin(Fan::pwmMin);
-  delay(4*1000);
-}
-
-/**
  * gettable vars:
+ *   OPMODE - current opmode
  *   FAN - fan speed in pwm
  *   TEMP - C reading of the internal temp sensor
  *   TEMP_SETPOINT_MIN - when to start fan
@@ -142,19 +154,24 @@ void onCommandGet()
   char *arg = g_sc.next();
   if(arg == 0)
     return;
-  //aNumber = atoi(arg);    // Converts a char string to an integer
-  //Serial.print("get arg: "); Serial.println(arg);  
+  DEBUG_PRINT("onCommandGet "); DEBUG_PRNTLN(arg);
   if(arg[0] == 'F')
   {
     // GET FAN handler
-    unsigned short pwmNow = g_fan[0].getPWM();
+    unsigned short pwmNow = fansGetPWM();
     Serial.println(pwmNow);
   } 
+  else if(arg[0] == 'O')
+  {
+    // GET OPMODE handler
+    unsigned short int opmode = g_pOpMode->getOpMode();  
+    Serial.println(opmode);
+  }
   else if(arg[0] == 'T')
   {
     // GET TEMP handler
-    unsigned short int temp = readTemperature();  
-    Serial.println(temp);
+    if(g_pOpMode != 0)
+      g_pOpMode->onCommandGetTemp();
   }
   else if(arg[0] == 'S')
   {
@@ -163,7 +180,6 @@ void onCommandGet()
   }
   else
   {
-    
     onCommandUnrecognized(0);
   }
 }
@@ -174,23 +190,36 @@ void onCommandGet()
  *   TEMP - C reading of the internal temp sensor
  *   TEMP_SETPOINT_MIN - when to start fan
  *   TEMP_SETPOINT_MAX - when to blow fan at full speed
+ *   OPMODE
+ * Argument is always numeric
  */
 void onCommandSet() 
 {
-   char *arg = g_sc.next();
+  char *arg = g_sc.next();
   if(arg == 0)
     return;
+  char *arg1 = g_sc.next();
+  if(arg1 == 0)
+    return;
+  int iArg = atoi(arg1);
+  DEBUG_PRINT("onCommandSet "); DEBUG_PRNT(arg); DEBUG_PRINT(" "); DEBUG_PRNTLN(iArg);
   if(arg[0] == 'F')
   {
-    // GET FAN handler
-    unsigned short pwmNow = g_fan[0].getPWM();
-    Serial.println(pwmNow);
+    // SET FAN handler
+    if(g_pOpMode != 0)
+      g_pOpMode->onCommandSetFan(iArg);
   } 
+  else if(arg[0] == 'O')
+  {
+    // SET OpMode handler
+    if(g_pOpMode != 0)
+      g_pOpMode->onCommandSetOpMode(iArg);
+  }
   else if(arg[0] == 'T')
   {
-    // GET TEMP handler
-    unsigned short int temp = readTemperature();  
-    Serial.println(temp);
+    // SET TEMP handler
+    if(g_pOpMode != 0)
+      g_pOpMode->onCommandSetTemp(iArg);
   }
   else if(arg[0] == 'S')
   {
@@ -224,22 +253,10 @@ void setup()
 {
   Serial.begin(115200);
   g_lm35.setup();
-  g_tempMin = g_tempMax = readTemperature();
+  g_lm35.read();
   g_led.setup();
-
-  //---------------------------------------------- Set PWM frequency for D3 & D11 ------------------------------
-  TCCR2B = TCCR2B & B11111000 | B00000001;    // set timer 2 divisor to     1 for PWM frequency of 31372.55 Hz
-  //TCCR2B = TCCR2B & B11111000 | B00000010;    // set timer 2 divisor to     8 for PWM frequency of  3921.16 Hz
-  //TCCR2B = TCCR2B & B11111000 | B00000011;    // set timer 2 divisor to    32 for PWM frequency of   980.39 Hz
-  //TCCR2B = TCCR2B & B11111000 | B00000100;    // set timer 2 divisor to    64 for PWM frequency of   490.20 Hz (The DEFAULT)
-  //TCCR2B = TCCR2B & B11111000 | B00000101;    // set timer 2 divisor to   128 for PWM frequency of   245.10 Hz
-  //TCCR2B = TCCR2B & B11111000 | B00000110;    // set timer 2 divisor to   256 for PWM frequency of   122.55 Hz
-  //TCCR2B = TCCR2B & B11111000 | B00000111;    // set timer 2 divisor to  1024 for PWM frequency of    30.64 Hz
-  for(short int i = 0; i < iFans; i++)
-    g_fan[i].setup();
-  //attachInterrupt(0, onHallSensor, RISING);
-  //g_fan[0].test();
-  fanSetup();
+  
+  fansSetup();
 
   // Setup callbacks for SerialCommand commands
   g_sc.addCommand("GET", onCommandGet);
@@ -250,50 +267,10 @@ void setup()
 
 void loop() 
 {
-  if(g_sc.available())
-  {
-    g_sc.readAndDispatch();
-    return;
-  }
-  // temp in degrees C
-  unsigned short int temp = readTemperature();  
-  Serial.print("readTemperature() => "); Serial.println(temp);
-
-  if(temp < tempMin) 
-  {
-    for(short int i = 0; i < iFans; i++)
-      g_fan[i].stop();
-    g_led.off();
-  }  
-  else if(temp < tempMax)
-  {
-    unsigned int pwmFan = map(temp, tempMin, tempMax, Fan::pwmMin, Fan::pwmMax);
-    unsigned short pwmNow = g_fan[0].getPWM();
-    if(pwmNow == 0) 
-    {
-      if(pwmFan < Fan::pwmStart) 
-        pwmFan = Fan::pwmStart;
-    }
-    else
-    {
-      // instead of just spinning at target pwm, lets get there gradually.
-      pwmFan = (pwmFan + pwmNow)/2;
-    }
-    for(short int i = 0; i < iFans; i++)
-      g_fan[i].spin(pwmFan);
-    g_led.off();
-  }
-  else
-  {
-    for(short int i = 0; i < iFans; i++)
-      g_fan[i].spin(Fan::pwmMax);
-    g_led.on();
-  }
-  //DEBUG_PRINTLN(g_uiCounter);
-  //g_uiCounter = 0;
-
+  if(g_pOpMode != 0)
+    g_pOpMode->loop();
   dumpStats(millis());  
-  delay(4000);
+  delay(1000);
 }
 
 

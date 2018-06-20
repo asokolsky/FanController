@@ -1,26 +1,16 @@
 /**
- * PWM-controled fan connected to an output  pin
+ * PWM-controled fan connected to an output pin
  * Fan sensor may be connected to another input pin
  */
 class Fan
 { 
-  /** PWM pin controlling the fan's speed */
-  short int m_pinFan;
-  /** input pin attached to fan's sensor */
-  short int m_pinSensor;
-
-  /** last PWM value we sent to the fan */
-  unsigned short m_pwm = 0;
-  
-  public:
-  
-  /** min fan PWM value to use */
+public:  
+  /** min fan PWM at which the fan continues to spin */
   static const unsigned short pwmMin = 16;
   /** min fan PWM value at which a fan can start  */
   static const unsigned short pwmStart = 30;
   /** max fan PWM value to use */
   static const unsigned short pwmMax = 255;
-  
   /**
    * 
    */
@@ -48,17 +38,19 @@ class Fan
     DEBUG_PRINTLN("Stopping fan...");
     spin(LOW);
   }
-  
+  /** spin the fan at this pwm */
   void spin(unsigned short pwm)
   {
     analogWrite(m_pinFan, pwm);
     m_pwm = pwm;
-    DEBUG_PRINT("analogWrite(pinFan) "); DEBUG_PRNTLN(pwm);    
+    //DEBUG_PRINT("analogWrite("); DEBUG_PRNT(m_pinFan); DEBUG_PRINT(", "); DEBUG_PRNT(pwm); DEBUG_PRINTLN(")");
   }
+  /** */
   void setup()
   {
     pinMode(m_pinFan, OUTPUT);
-    pinMode(m_pinSensor, INPUT);
+    if(m_pinSensor > 0)
+      pinMode(m_pinSensor, INPUT);
   }
 
 
@@ -67,6 +59,7 @@ class Fan
    */
   void test()
   {
+    /*
     Serial.println("Starting a test to find a min pwm at which this fan can be started...");
     Serial.println("Note the value when we first FAIL to start the fan");
     for(unsigned short int pwm = 90; pwm > 10; pwm = pwm - 8)
@@ -76,9 +69,31 @@ class Fan
       // try to start the fan
       spin(pwm);
       delay(4*1000);
-    }    
+    } 
+    */   
   }
-  
+
+protected:
+  /** PWM pin controlling the fan's speed */
+  short int m_pinFan;
+  /** input pin attached to fan's sensor */
+  short int m_pinSensor;
+  /** last PWM value we sent to the fan */
+  short unsigned m_pwm = 0;
 };
+
+extern Fan g_fan[];
+/** # of fans we control */
+//const short int iFans = 3; //sizeof(g_fan) / sizeof(g_fan[0]);
+
+void fansSetup();
+void fansStop();
+void fansSpin(unsigned short pwm);
+void fansDumpStats(char buf[]);
+
+inline unsigned short fansGetPWM()
+{
+  return g_fan[0].getPWM();
+}
 
 

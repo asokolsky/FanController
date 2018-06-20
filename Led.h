@@ -27,4 +27,7 @@ private:
   short int m_pin;
 };
 
+/** the overheating (builtin) led is on pin 13 */
+extern Led g_led;
+
 

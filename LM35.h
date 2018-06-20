@@ -1,9 +1,18 @@
+
+unsigned int myAnalogRead(short int pin);
+
 /**
- * Arduino wrapper for a simple analog temperature sensor - LM35
+ * Arduino wrapper for TI LM35 sensor
+ * www.ti.com/lit/ds/symlink/lm35.pdf
  */
 class LM35
 {
 public:
+  /** Min observed temperature in C */
+  static unsigned short int g_tempMin;
+  /** Max observed temperature in C */
+  static unsigned short int g_tempMax;
+
   LM35(short int pin) :
     m_pin(pin)
   {
@@ -25,36 +34,45 @@ public:
   */
   unsigned short int read()
   {
-    // first sample seems to fluctuate a lot. Disregard it
-    {
-      unsigned int intmp = analogRead(m_pin);
-      //Serial.println(intmp);
-      delay(60);
-    }
-
-    // according to http://www.atmel.com/dyn/resources/prod_documents/doc8003.pdf
-    // 11 bit virtual resolution arduino ADC is 10 bit real resolution
-    // for 12 bit resolution 16 samples and >> 4 is needed
-    unsigned int reading = 0; // accumulate samples here
-    for(int i=0; i<=3; i++)
-    {
-      unsigned int intmp = analogRead(m_pin);
-      reading = reading + intmp;
-      //Serial.println(intmp);
-      delay(60);
-    }
-    reading = reading>>2; // averaged over 4 samples
-    /*
-    unsigned int reading = analogRead(pinTemp);
-    Serial.print("analogRead() => ");
-    Serial.println(reading);
-    */
+    unsigned int reading = myAnalogRead(m_pin);
     // 110 mV is mapped into 1024 steps.  analogReference(INTERNAL) needed
     float tempC = (float)reading * 110 / 1024;
-    return (unsigned short)tempC;
+    ;return (unsigned short)tempC;
+    unsigned short temp = (unsigned short)tempC;
+    if(temp < g_tempMin)
+      g_tempMin = temp;
+    else if(temp > g_tempMax)
+      g_tempMax = temp;
+    return temp;  
   }
 
 private:
+  /** sensor is connected to this pin */
   short int m_pin;
 };
+extern LM35 g_lm35;
 
+class Potentiometer
+{
+public:
+  Potentiometer(short int pin) :
+    m_pin(pin)
+  {
+
+  }
+
+  void setup()
+  {
+    pinMode(m_pin, INPUT);
+  }
+
+  unsigned int read()
+  {
+    return myAnalogRead(m_pin);
+  }
+
+private:
+  /** potentiometer is connected to this analog input pin */
+  short int m_pin;
+};
+extern Potentiometer g_pot;

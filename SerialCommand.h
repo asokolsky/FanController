@@ -115,6 +115,8 @@ private:
   }
 };
 
+/** global serial command handler */
+extern SerialCommand g_sc;
 
 #endif //SerialCommand_h
 

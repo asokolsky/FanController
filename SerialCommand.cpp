@@ -22,10 +22,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 ***********************************************************************************/
 #include <Arduino.h>
 #include <string.h>
+#define NODEBUG 1
 #include "Trace.h"
 #include "SerialCommand.h"
 
 const static char *SerialCommand::delim = " ";     // null-terminated list of delimeter chars for tokenizing (default " ")
+/** serial command handler */
+SerialCommand g_sc;
 
 
 #ifdef SERIALCOMMAND_HARDWAREONLY
