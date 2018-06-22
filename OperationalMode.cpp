@@ -15,7 +15,7 @@ ExternalyMeasuredTemperatureMode g_theExternalyMeasuredTemperatureMode;
 DirectInternalFanControlMode g_theDirectInternalFanControlMode;
 DirectExternalFanControlMode g_theDirectExternalFanControlMode;
 /** default op mode */
-OpMode *g_pOpMode = &g_theManualTemperatureSettingMode;
+OpMode *g_pOpMode = &g_theInternallyMeasuredTemperatureMode;
 
 /**
  * most basic behaviour is response to serial commands

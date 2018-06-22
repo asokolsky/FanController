@@ -43,7 +43,7 @@ public:
   {
     analogWrite(m_pinFan, pwm);
     m_pwm = pwm;
-    //DEBUG_PRINT("analogWrite("); DEBUG_PRNT(m_pinFan); DEBUG_PRINT(", "); DEBUG_PRNT(pwm); DEBUG_PRINTLN(")");
+    DEBUG_PRINT("analogWrite("); DEBUG_PRNT(m_pinFan); DEBUG_PRINT(", "); DEBUG_PRNT(pwm); DEBUG_PRINTLN(")");
   }
   /** */
   void setup()

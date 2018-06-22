@@ -6,8 +6,8 @@
 /** These are the fans we control */
 Fan g_fan[] = {
   {pinFan1pwm, pinFan1sen},
-  {pinFan2pwm, pinFan2sen},
-  {pinFan3pwm, pinFan3sen}
+  //{pinFan2pwm, pinFan2sen},
+  //{pinFan3pwm, pinFan3sen}
 };
 /** # of fans we control */
 const short int iFans = sizeof(g_fan) / sizeof(g_fan[0]);

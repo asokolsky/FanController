@@ -120,7 +120,7 @@ void dumpStats()
   sprintf(buf, "Settings: tempMin=%d, tempMax=%d,", (int)OpMode::tempMin, (int)OpMode::tempMax);
   Serial.println(buf);
   int temp = (int)g_lm35.read();
-  sprintf(buf, "Observed: g_tempMin=%d, g_tempMax=%d, temp=%d", (int)g_lm35.g_tempMin, (int)g_lm35.g_tempMax, temp);
+  sprintf(buf, "Observed: g_tempMin=%d, g_tempMax=%d, temp=%d", (int)LM35::g_tempMin, (int)LM35::g_tempMax, temp);
   Serial.println(buf);
   fansDumpStats(buf);
 }

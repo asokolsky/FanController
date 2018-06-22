@@ -1,0 +1,22 @@
+/**
+ *  Attribute is something that has name and value.
+ *  e.g. Temperature=>40Celsius
+ *       Fan speed - 100pwm
+ *  And you can GET and maybe SET it.
+ *  You can find it by name.
+ */
+class Atribute
+{
+public:
+  Atribute(const char *m_name, int iValue)
+
+
+  
+private:
+  const char *m_name;
+  int m_iValue;
+  
+ 
+};
+
+

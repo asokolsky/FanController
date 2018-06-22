@@ -25,6 +25,7 @@ public:
     // switch to internal 1.1V reference
     analogReference(INTERNAL);  
     pinMode(m_pin, INPUT);
+    g_tempMin = g_tempMax = read();
   }
 
   /**  
@@ -37,8 +38,7 @@ public:
     unsigned int reading = myAnalogRead(m_pin);
     // 110 mV is mapped into 1024 steps.  analogReference(INTERNAL) needed
     float tempC = (float)reading * 110 / 1024;
-    ;return (unsigned short)tempC;
-    unsigned short temp = (unsigned short)tempC;
+    unsigned short int temp = (unsigned short)tempC;
     if(temp < g_tempMin)
       g_tempMin = temp;
     else if(temp > g_tempMax)
