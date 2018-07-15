@@ -78,6 +78,8 @@ bool OpMode::onCommandSetOpMode(unsigned short int mode)
  */
 void OpMode::onTemperature(unsigned short int temp)
 {
+  DEBUG_PRINT("onTemperature "); DEBUG_PRINTDEC(temp); DEBUG_PRINT(" ");
+  
   if(temp < tempMin) 
   {
     fansStop();

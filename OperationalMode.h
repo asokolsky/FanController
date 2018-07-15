@@ -17,9 +17,9 @@ class OpMode
 {
 public:
     /** the temperature in C to start the fan */
-    static const unsigned short int tempMin = 26;
+    static const unsigned short int tempMin = 30;
     /** the maximum temperature in C when fan is at 100% */
-    static const unsigned short int tempMax = 35;
+    static const unsigned short int tempMax = 45;
 
 
     OpMode() : m_opMode(opModeInvalid)

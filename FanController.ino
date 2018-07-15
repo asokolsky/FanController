@@ -43,7 +43,7 @@ unsigned int myAnalogRead(short int pin)
   {
     unsigned int intmp = analogRead(pin);
     //Serial.println(intmp);
-    delay(60);
+    myDelay(60);
   }
   // according to http://www.atmel.com/dyn/resources/prod_documents/doc8003.pdf
   // 11 bit virtual resolution arduino ADC is 10 bit real resolution
@@ -69,7 +69,7 @@ unsigned int myAnalogRead(short int pin)
  * This works on Arduinos with a 328 or 168 only
  * https://code.google.com/archive/p/tinkerit/wikis/SecretVoltmeter.wiki
  */
-static long readVcc() 
+/*static long readVcc() 
 { 
   long result; 
   // Read 1.1V reference against AVcc 
@@ -85,13 +85,13 @@ static long readVcc()
   result = 1126400L / result; 
   // Back-calculate AVcc in mV 
   return result; 
-}
+}*/
 
 /**
  * This works on Arduinos with a 328 only
  * https://code.google.com/archive/p/tinkerit/wikis/SecretThermometer.wiki
  */
-static long readTemp() 
+/*static long readTemp() 
 { 
   long result; 
   // Read temperature sensor against 1.1V reference 
@@ -106,7 +106,7 @@ static long readTemp()
   result |= ADCH<<8; 
   result = (result - 125) * 1075; 
   return result; 
-}
+}*/
 
 
 /**
@@ -115,8 +115,8 @@ static long readTemp()
 void dumpStats()
 {
   char buf[80];
-  sprintf(buf, "Vcc=%ld mV, temp=%ld,", readVcc(), readTemp());
-  Serial.println(buf);
+  //sprintf(buf, "Vcc=%ld mV, temp=%ld,", readVcc(), readTemp());
+  //Serial.println(buf);
   sprintf(buf, "Settings: tempMin=%d, tempMax=%d,", (int)OpMode::tempMin, (int)OpMode::tempMax);
   Serial.println(buf);
   int temp = (int)g_lm35.read();
@@ -126,19 +126,20 @@ void dumpStats()
 }
 
 /**
- * Dump some statistics so that we can see how the controller and environment are doing...
+ * Dump some statistics if it is a right time.
  */
-void dumpStats(unsigned long now)
+void dumpStatsMaybe(unsigned long now)
 {
   /** how often to dump stats */
-  const unsigned long timeStatsDumpPeriod = 30000;
+  const unsigned long ulStatsDumpPeriod = 3*1000;
   /** when we dumped stats last */
-  static unsigned long g_timeLastStatsDump = 0;
+  static unsigned long g_ulToDumpStats = 0;
   // the following will handle rollover just fine!
-  if(now < (g_timeLastStatsDump + timeStatsDumpPeriod))
-    return;
-  g_timeLastStatsDump = now;
-  dumpStats();
+  if(now > g_ulToDumpStats)
+  {
+    g_ulToDumpStats = now + ulStatsDumpPeriod;
+    dumpStats();
+  }
 }
 
 /**
@@ -269,7 +270,7 @@ void loop()
 {
   if(g_pOpMode != 0)
     g_pOpMode->loop();
-  dumpStats(millis());  
+  dumpStatsMaybe(nowMillis());  
   delay(1000);
 }
 

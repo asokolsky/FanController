@@ -1,9 +1,10 @@
 # FanController
 
-A universal low cost arduino controller for 12V fans.
+A universal low cost arduino controller for 12V fans.  Designed to accomodate various usage scenarios: fan can be controlled manually, by built-in temperature sensor or by external software communicating with the controller via serial/usb connection.
 
 ## Features
 
+- Works with any fan, even 2-wire one, by modulatiung fan power supply using PWM
 - Upon start up spins up fan from StartPWM to MaxPWM to MinPWM to verify fan functionality;
 - Measures ambient temperature using LM35 sensor;
 - Spins the fans according to the temperature measured or potentiometer position or command received over serial port;
@@ -69,7 +70,7 @@ In this case:
 
 ## TODO
 
-??
+Calculate fan rpm and add it into stats printed out.
 
 
 ## External Software to Communicate with the Controller
@@ -82,3 +83,6 @@ or CPU temperature like this:
 ```
 sysctl -n dev.cpu.0.temperature
 ```
+
+## Other Relevant Projects
+https://www.baldengineer.com/pwm-3-pin-pc-fan-arduino.html

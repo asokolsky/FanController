@@ -1,10 +1,11 @@
+#pragma once
 /**
  * LED connected to an output pin
  */
 class Led
 { 
 public:
-  Led(short int pin) :
+  Led(const short int pin) :
     m_pin(pin)
   {
   }   
@@ -29,5 +30,4 @@ private:
 
 /** the overheating (builtin) led is on pin 13 */
 extern Led g_led;
-
 
